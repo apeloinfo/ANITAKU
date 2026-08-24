@@ -1,0 +1,6 @@
+{
+  "name": "Anime Manga Novel App",
+  "description": "Dynamic Anime, Manga, and Novel streaming and reading platform with real-time API integrations, watch/read tracking, and custom player/reader.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
