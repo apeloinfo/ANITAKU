@@ -23,11 +23,15 @@ export const CharacterModal: React.FC = () => {
       <div className="p-4 max-w-2xl mx-auto space-y-6">
         {/* Character Hero Card */}
         <div className="flex gap-4 p-4 bg-[#12121A] rounded-3xl border border-white/10 shadow-xl">
-          <img
-            src={selectedCharacter.image}
-            alt={selectedCharacter.name}
-            className="w-28 h-36 sm:w-32 sm:h-44 object-cover rounded-2xl shadow-lg shrink-0"
-          />
+          {selectedCharacter.image ? (
+            <img
+              src={selectedCharacter.image}
+              alt={selectedCharacter.name}
+              className="w-28 h-36 sm:w-32 sm:h-44 object-cover rounded-2xl shadow-lg shrink-0"
+            />
+          ) : (
+            <div className="w-28 h-36 sm:w-32 sm:h-44 bg-neutral-800 rounded-2xl shadow-lg shrink-0" />
+          )}
           <div className="flex-1 flex flex-col justify-between py-1">
             <div>
               <h1 className="text-xl sm:text-2xl font-extrabold text-white">{selectedCharacter.name}</h1>
@@ -109,7 +113,11 @@ export const CharacterModal: React.FC = () => {
                   key={app.id}
                   className="flex items-center gap-3 p-2.5 bg-[#12121A] rounded-2xl border border-white/10 hover:border-purple-500/40 transition-all cursor-pointer"
                 >
-                  <img src={app.image} alt={app.title} className="w-12 h-16 object-cover rounded-xl shadow-md" />
+                  {app.image ? (
+                    <img src={app.image} alt={app.title} className="w-12 h-16 object-cover rounded-xl shadow-md" />
+                  ) : (
+                    <div className="w-12 h-16 bg-neutral-800 rounded-xl shadow-md shrink-0" />
+                  )}
                   <div className="flex-1 min-w-0">
                     <h4 className="text-xs font-bold text-white line-clamp-1">{app.title}</h4>
                     <p className="text-[11px] text-white/50 mt-0.5">

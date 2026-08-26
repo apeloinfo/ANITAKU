@@ -144,11 +144,17 @@ export const CommunityView: React.FC = () => {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <img
-                      src={item.avatar}
-                      alt={item.author}
-                      className="w-6 h-6 rounded-full object-cover"
-                    />
+                    {item.avatar ? (
+                      <img
+                        src={item.avatar}
+                        alt={item.author}
+                        className="w-6 h-6 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-purple-600/30 flex items-center justify-center text-[10px] font-bold text-purple-300">
+                        {item.author ? item.author.slice(0, 1) : 'U'}
+                      </div>
+                    )}
                     <span className="text-xs font-bold text-white/80">{item.author}</span>
                     <span className="text-[10px] text-white/40">· {item.time}</span>
                   </div>

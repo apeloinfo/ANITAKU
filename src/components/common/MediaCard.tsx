@@ -96,13 +96,13 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             {/* Format Pill */}
             <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/10 text-white/90">
-              {item.format || item.type || 'TV'}
+              {item.format || 'TV'}
             </span>
 
             {/* Release / Status */}
-            {item.releaseYear && (
+            {item.year && (
               <span className="text-[11px] font-semibold text-neutral-400">
-                {item.releaseYear}
+                {item.year}
               </span>
             )}
           </div>
@@ -162,7 +162,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       >
         {/* Rating Score Badge (Bottom-Left Midnight Sapphire Pill - Rendered Immediately with real API score) */}
         {showScore && !isUpcoming && !showEpisodeBadge && !showHeartCount && (
-          <RatingPill score={item.rating ?? item.score} status={item.status} />
+          <RatingPill score={item.score} status={item.status} />
         )}
 
         {/* Episode Badge (Bottom-Left Royal Blue Pill e.g. EP 44, EP 30, EP 8) */}
@@ -178,20 +178,14 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         )}
 
         {/* Community Real Love / Heart react count badge */}
-        {showHeartCount && (
+        {showHeartCount && Boolean(item.communityHearts) && (
           <div className="absolute bottom-2.5 left-2.5 z-10 select-none pointer-events-none">
             <div className="px-3 py-1 rounded-full bg-[#7c3aed]/95 backdrop-blur-md border border-white/40 text-white text-xs font-black flex items-center gap-1.5 shadow-md leading-none tracking-tight">
               <Heart className="w-3.5 h-3.5 fill-current text-pink-300" />
               <span>
-                {item.communityHearts
-                  ? item.communityHearts > 999
-                    ? `${(item.communityHearts / 1000).toFixed(1)}k`
-                    : item.communityHearts
-                  : item.externalRatingCount
-                  ? item.externalRatingCount > 999
-                    ? `${(item.externalRatingCount / 1000).toFixed(1)}k`
-                    : item.externalRatingCount
-                  : 480}
+                {item.communityHearts! > 999
+                  ? `${(item.communityHearts! / 1000).toFixed(1)}k`
+                  : item.communityHearts}
               </span>
             </div>
           </div>

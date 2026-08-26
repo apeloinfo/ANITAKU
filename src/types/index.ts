@@ -9,6 +9,7 @@ export type AccentColorKey = 'Purple' | 'Blue' | 'Teal' | 'Emerald' | 'Amber' | 
 export interface MediaItem {
   id: string | number;
   title: string;
+  englishTitle?: string;
   nativeTitle?: string;
   romajiTitle?: string;
   coverImage: string;
@@ -32,6 +33,7 @@ export interface MediaItem {
   totalEpisodes?: number;
   totalChapters?: number;
   totalVolumes?: number;
+  duration?: number;
   latestEpisode?: number;
   lastReadChapter?: number;
   currentEpisodeBadge?: string; // e.g. "EP 19", "EP 6"
@@ -127,6 +129,28 @@ export interface EpisodeItem {
   airDate?: string;
   duration?: string;
   filler?: boolean;
+  providerId?: string;
+  airingAt?: number;
+  isReleased?: boolean;
+}
+
+export interface MangaChapterItem {
+  id: string;
+  chapterNumber: number;
+  title: string;
+  volume?: string;
+  pages?: number;
+  publishAt?: string;
+  scanlationGroup?: string;
+}
+
+export interface NovelChapterItem {
+  id: string;
+  chapterNumber: number;
+  title: string;
+  volume?: number | string;
+  updatedAt?: number;
+  providerId?: string;
 }
 
 export interface WatchOrderItem {

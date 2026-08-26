@@ -1,69 +1,67 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
-  MediaCategory,
-  NavTab,
   MediaItem,
+  MediaCategory,
   Character,
-  LibraryStatus,
   UserLibraryEntry,
   RecentActivityItem,
+  FilterOptions,
+  LibraryStatus,
   SettingsState,
   AccentColorKey,
-  FilterOptions,
+  NavTab,
 } from '../types';
-import { INITIAL_USER_LIBRARY, INITIAL_RECENT_ACTIVITY } from '../services/api';
+import { safeGetItem, safeSetItem } from '../utils/storage';
 
-export const ACCENT_COLOR_MAP: Record<AccentColorKey, { hex: string; bg: string; text: string; ring: string; border: string; glow: string }> = {
-  Purple: { hex: '#C084FC', bg: 'bg-purple-500', text: 'text-purple-400', ring: 'ring-purple-400', border: 'border-purple-500', glow: 'shadow-[0_0_15px_rgba(192,132,252,0.5)]' },
-  Blue: { hex: '#60A5FA', bg: 'bg-blue-500', text: 'text-blue-400', ring: 'ring-blue-400', border: 'border-blue-500', glow: 'shadow-[0_0_15px_rgba(96,165,250,0.5)]' },
-  Teal: { hex: '#2DD4BF', bg: 'bg-teal-500', text: 'text-teal-400', ring: 'ring-teal-400', border: 'border-teal-500', glow: 'shadow-[0_0_15px_rgba(45,212,191,0.5)]' },
-  Emerald: { hex: '#34D399', bg: 'bg-emerald-500', text: 'text-emerald-400', ring: 'ring-emerald-400', border: 'border-emerald-500', glow: 'shadow-[0_0_15px_rgba(52,211,153,0.5)]' },
-  Amber: { hex: '#FBBF24', bg: 'bg-amber-500', text: 'text-amber-400', ring: 'ring-amber-400', border: 'border-amber-500', glow: 'shadow-[0_0_15px_rgba(251,191,36,0.5)]' },
-  Coral: { hex: '#FB923C', bg: 'bg-orange-500', text: 'text-orange-400', ring: 'ring-orange-400', border: 'border-orange-500', glow: 'shadow-[0_0_15px_rgba(251,146,60,0.5)]' },
-  Rose: { hex: '#FB7185', bg: 'bg-rose-500', text: 'text-rose-400', ring: 'ring-rose-400', border: 'border-rose-500', glow: 'shadow-[0_0_15px_rgba(251,113,133,0.5)]' },
-  Red: { hex: '#F87171', bg: 'bg-red-500', text: 'text-red-400', ring: 'ring-red-400', border: 'border-red-500', glow: 'shadow-[0_0_15px_rgba(248,113,113,0.5)]' },
-  Lime: { hex: '#A3E635', bg: 'bg-lime-500', text: 'text-lime-400', ring: 'ring-lime-400', border: 'border-lime-500', glow: 'shadow-[0_0_15px_rgba(163,230,53,0.5)]' },
+export type { NavTab };
+
+export const ACCENT_COLOR_MAP: Record<AccentColorKey, { bg: string; text: string; hex: string }> = {
+  Purple: { bg: 'bg-purple-500', text: 'text-purple-400', hex: '#a855f7' },
+  Blue: { bg: 'bg-blue-500', text: 'text-blue-400', hex: '#3b82f6' },
+  Teal: { bg: 'bg-teal-500', text: 'text-teal-400', hex: '#14b8a6' },
+  Emerald: { bg: 'bg-emerald-500', text: 'text-emerald-400', hex: '#10b981' },
+  Amber: { bg: 'bg-amber-500', text: 'text-amber-400', hex: '#f59e0b' },
+  Coral: { bg: 'bg-orange-500', text: 'text-orange-400', hex: '#f97316' },
+  Rose: { bg: 'bg-rose-500', text: 'text-rose-400', hex: '#f43f5e' },
+  Red: { bg: 'bg-red-500', text: 'text-red-400', hex: '#ef4444' },
+  Lime: { bg: 'bg-lime-500', text: 'text-lime-400', hex: '#84cc16' },
 };
 
-const DEFAULT_SETTINGS: SettingsState = {
-  appLanguage: 'System Default',
+export const DEFAULT_SETTINGS: SettingsState = {
+  appLanguage: 'English',
   appHaptics: true,
   deviceNotifications: true,
-  dns: 'Cloudflare',
-  enableTrailers: false,
+  dns: 'System Default',
+  enableTrailers: true,
   trailersStartMuted: true,
-  cacheLimit: 'Balanced',
-
+  cacheLimit: '2 GB',
   pureBlackMode: true,
   accentColor: 'Purple',
-  glassBlur: 10,
+  glassBlur: 16,
   glassSaturation: 100,
-  glassRefraction: 10,
-  glassTint: 12,
-
-  homepageMetadata: 'Auto',
+  glassRefraction: 50,
+  glassTint: 20,
+  homepageMetadata: 'AniList',
   titleLanguage: 'English',
   showLibraryProgress: true,
   fillerList: true,
-
   gestures: true,
-  ambientLight: false,
+  ambientLight: true,
   autoSkipFiller: false,
   sleepTimer: 'Off',
-  videoQuality: 'Auto',
+  videoQuality: '1080p',
   audioPreference: 'Japanese',
   subtitleLanguage: 'English',
-  subtitlePreference: 'Automatic',
-  subtitleFont: 'Netflix Sans',
+  subtitlePreference: 'Softsubs',
+  subtitleFont: 'Inter',
   subtitleSize: 16,
-  subtitleElevation: -10,
-  playbackSpeed: '1x',
-
+  subtitleElevation: 10,
+  playbackSpeed: '1.0x',
   mangaReaderMode: 'Webtoon',
-  pageTurnAnimation: 'Default',
-  pagedReaderDirection: 'Left to Right',
+  pageTurnAnimation: 'Slide',
+  pagedReaderDirection: 'Right to Left',
   imageScale: 'Fit',
-  zoomStart: 'Auto',
+  zoomStart: 'Center',
   tapNavigation: 'Edges',
   readerBackground: 'Black',
   cropBorders: false,
@@ -71,11 +69,13 @@ const DEFAULT_SETTINGS: SettingsState = {
   automaticWebtoon: true,
   widePageZoom: true,
   keepScreenOn: true,
-  preloadPages: 8,
-
-  downloadPath: 'Downloads/Anify/Downloaded',
-  deleteFilesByDefault: true,
+  preloadPages: 5,
+  downloadPath: '/storage/emulated/0/Download/Satori',
+  deleteFilesByDefault: false,
 };
+
+export const INITIAL_USER_LIBRARY: UserLibraryEntry[] = [];
+export const INITIAL_RECENT_ACTIVITY: RecentActivityItem[] = [];
 
 export const DEFAULT_FILTERS: FilterOptions = {
   category: 'anime',
@@ -127,15 +127,20 @@ interface AppContextType {
   activeVideoEpisode: { media: MediaItem; episodeNumber: number } | null;
   setActiveVideoEpisode: (ep: { media: MediaItem; episodeNumber: number } | null) => void;
 
-  activeReader: { media: MediaItem; chapterNumber: number } | null;
-  setActiveReader: (r: { media: MediaItem; chapterNumber: number } | null) => void;
+  activeReader: { media: MediaItem; chapterNumber: number; chapterId?: string } | null;
+  setActiveReader: (r: { media: MediaItem; chapterNumber: number; chapterId?: string } | null) => void;
 
+  // Personal Library state (Watching, Reading, Planning, Completed, Dropped)
   userLibrary: UserLibraryEntry[];
   addToLibrary: (media: MediaItem, status: LibraryStatus) => void;
   removeFromLibrary: (mediaId: string | number) => void;
   updateLibraryProgress: (mediaId: string | number, progress: number) => void;
-  toggleFavorite: (media: MediaItem) => void;
   getLibraryEntry: (mediaId: string | number) => UserLibraryEntry | undefined;
+
+  // Independent Favorites state (strictly profile favorites, not saved as a library status)
+  userFavorites: MediaItem[];
+  isMediaFavorite: (mediaId: string | number) => boolean;
+  toggleFavorite: (media: MediaItem) => void;
 
   recentActivity: RecentActivityItem[];
 
@@ -167,41 +172,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeLibraryStatus, setActiveLibraryStatus] = useState<LibraryStatus | 'Favorites' | null>(null);
 
   const [activeVideoEpisode, setActiveVideoEpisode] = useState<{ media: MediaItem; episodeNumber: number } | null>(null);
-  const [activeReader, setActiveReader] = useState<{ media: MediaItem; chapterNumber: number } | null>(null);
+  const [activeReader, setActiveReader] = useState<{ media: MediaItem; chapterNumber: number; chapterId?: string } | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [settingsSubPage, setSettingsSubPage] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterOptions>(DEFAULT_FILTERS);
 
-  // User Library state
+  // User Library state (Watching, Reading, Planning, Completed, Dropped)
   const [userLibrary, setUserLibrary] = useState<UserLibraryEntry[]>(() => {
-    const saved = localStorage.getItem('satori_user_library');
-    return saved ? JSON.parse(saved) : INITIAL_USER_LIBRARY;
+    return safeGetItem<UserLibraryEntry[]>('satori_user_library', INITIAL_USER_LIBRARY, true);
+  });
+
+  // Dedicated User Favorites state (persisted independently)
+  const [userFavorites, setUserFavorites] = useState<MediaItem[]>(() => {
+    return safeGetItem<MediaItem[]>('satori_user_favorites', [], true);
   });
 
   // Recent activity
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>(() => {
-    const saved = localStorage.getItem('satori_recent_activity');
-    return saved ? JSON.parse(saved) : INITIAL_RECENT_ACTIVITY;
+    return safeGetItem<RecentActivityItem[]>('satori_recent_activity', INITIAL_RECENT_ACTIVITY, true);
   });
 
   // Settings
   const [settings, setSettings] = useState<SettingsState>(() => {
-    const saved = localStorage.getItem('satori_settings');
-    return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    const saved = safeGetItem<Partial<SettingsState> | null>('satori_settings', null, true);
+    return saved ? { ...DEFAULT_SETTINGS, ...saved } : DEFAULT_SETTINGS;
   });
 
   useEffect(() => {
-    localStorage.setItem('satori_user_library', JSON.stringify(userLibrary));
+    safeSetItem('satori_user_library', userLibrary, true);
   }, [userLibrary]);
 
   useEffect(() => {
-    localStorage.setItem('satori_recent_activity', JSON.stringify(recentActivity));
+    safeSetItem('satori_user_favorites', userFavorites, true);
+  }, [userFavorites]);
+
+  useEffect(() => {
+    safeSetItem('satori_recent_activity', recentActivity, true);
   }, [recentActivity]);
 
   useEffect(() => {
-    localStorage.setItem('satori_settings', JSON.stringify(settings));
+    safeSetItem('satori_settings', settings, true);
   }, [settings]);
 
   const showToast = (msg: string) => {
@@ -239,6 +251,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         return updated;
       }
+      const isFav = userFavorites.some((f) => String(f.id) === String(media.id));
       const newEntry: UserLibraryEntry = {
         id: `lib-${Date.now()}`,
         mediaId: media.id,
@@ -250,7 +263,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalCount: media.totalEpisodes || media.totalChapters || media.totalVolumes || 12,
         lastUpdated: 'Just now',
         score: media.score,
-        isFavorite: false,
+        isFavorite: isFav,
       };
       return [newEntry, ...prev];
     });
@@ -285,31 +298,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const isMediaFavorite = (mediaId: string | number) => {
+    return userFavorites.some((item) => String(item.id) === String(mediaId));
+  };
+
   const toggleFavorite = (media: MediaItem) => {
-    const entry = userLibrary.find((i) => String(i.mediaId) === String(media.id));
-    if (entry) {
-      const isFav = !entry.isFavorite;
+    const isCurrentlyFav = userFavorites.some((i) => String(i.id) === String(media.id));
+
+    if (isCurrentlyFav) {
+      // Remove from favorites
+      setUserFavorites((prev) => prev.filter((i) => String(i.id) !== String(media.id)));
+      // If it exists in userLibrary, simply toggle isFavorite flag without affecting library status
       setUserLibrary((prev) =>
         prev.map((i) =>
-          String(i.mediaId) === String(media.id) ? { ...i, isFavorite: isFav } : i
+          String(i.mediaId) === String(media.id) ? { ...i, isFavorite: false } : i
         )
       );
-      showToast(isFav ? 'Added to favorites' : 'Removed from favorites');
+      showToast('Removed from favorites');
     } else {
-      const newEntry: UserLibraryEntry = {
-        id: `lib-${Date.now()}`,
-        mediaId: media.id,
+      // Add to favorites list directly (does NOT create any Watching/Reading library entry)
+      const favItem: MediaItem = {
+        id: String(media.id),
         title: media.title,
+        romajiTitle: media.romajiTitle,
+        nativeTitle: media.nativeTitle,
         coverImage: media.coverImage,
+        bannerImage: media.bannerImage,
         category: media.category,
-        status: media.category === 'anime' ? 'Watching' : 'Reading',
-        currentProgress: 1,
-        totalCount: media.totalEpisodes || media.totalChapters || 12,
-        lastUpdated: 'Just now',
+        format: media.format,
+        status: media.status,
         score: media.score,
-        isFavorite: true,
+        year: media.year,
+        genres: media.genres,
+        description: media.description,
+        studio: media.studio,
+        author: media.author,
+        communityHearts: media.communityHearts,
       };
-      setUserLibrary((prev) => [newEntry, ...prev]);
+
+      setUserFavorites((prev) => [favItem, ...prev.filter((i) => String(i.id) !== String(media.id))]);
+      // If it exists in userLibrary, simply sync isFavorite flag
+      setUserLibrary((prev) =>
+        prev.map((i) =>
+          String(i.mediaId) === String(media.id) ? { ...i, isFavorite: true } : i
+        )
+      );
       showToast('Added to favorites');
     }
   };
@@ -349,8 +382,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addToLibrary,
         removeFromLibrary,
         updateLibraryProgress,
-        toggleFavorite,
         getLibraryEntry,
+        userFavorites,
+        isMediaFavorite,
+        toggleFavorite,
         recentActivity,
         filters,
         setFilters,

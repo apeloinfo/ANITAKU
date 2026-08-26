@@ -75,12 +75,16 @@ async function fetchAnify<T>(endpoint: string, params: Record<string, string | n
     return cached.data;
   }
 
-  // 1. Try server proxy first (avoids browser CORS & iframe limitations)
+  // 1. Try server proxy first with 2.5s timeout (avoids stalling UI)
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
     const proxyUrl = `/api/anify/${cleanEndpoint}${queryString}`;
     const proxyRes = await fetch(proxyUrl, {
       headers: { Accept: 'application/json' },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (proxyRes.ok) {
       const data = await proxyRes.json();
@@ -93,12 +97,16 @@ async function fetchAnify<T>(endpoint: string, params: Record<string, string | n
     // Fall back to direct request
   }
 
-  // 2. Direct request fallback
+  // 2. Direct request fallback with 2.5s timeout
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
     const directUrl = `${ANIFY_DIRECT_URL}/${cleanEndpoint}${queryString}`;
     const directRes = await fetch(directUrl, {
       headers: { Accept: 'application/json' },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (directRes.ok) {
       const data = await directRes.json();
@@ -407,3 +415,79 @@ function parseNovelContent(raw: any, providerId: string, chapterNumber: number, 
     providerId,
   };
 }
+
+/**
+ * Direct alias as requested: Pass live episode ID or episodeNumber to getSources(animeId, episodeNumber)
+ */
+export async function getSources(
+  animeId: string | number,
+  episodeNumber: number,
+  options?: {
+    providerId?: string;
+    watchId?: string;
+    subType?: 'sub' | 'dub';
+    title?: string;
+  }
+): Promise<AnifyStreamData | null> {
+  return getAnimeStreamSources(animeId, episodeNumber, options);
+}
+
+/**
+ * Fetch real Manga chapter page image URLs via Anify providers (MangaDex, MangaSee, MangaKakalot)
+ */
+export async function getAnifyMangaPages(
+  anilistId: string | number,
+  chapterNumber: number,
+  title?: string
+): Promise<string[]> {
+  try {
+    let data = await fetchAnify<any>(`info/${anilistId}`, { type: 'manga' });
+    if (!data && title) {
+      const searchRes = await fetchAnify<any[]>('search', { query: title, type: 'manga' });
+      if (Array.isArray(searchRes) && searchRes.length > 0 && searchRes[0]?.id) {
+        data = await fetchAnify<any>(`info/${searchRes[0].id}`, { type: 'manga' });
+      }
+    }
+
+    if (data && Array.isArray(data.chapters)) {
+      for (const provider of data.chapters) {
+        const providerId = provider.providerId || provider.id || 'mangadex';
+        const ch = (provider.chapters || []).find((c: any) => Number(c.number) === chapterNumber);
+        if (ch) {
+          const readId = ch.id || ch.readId;
+          const pagesRes = await fetchAnify<any>('pages', {
+            providerId,
+            readId,
+            chapterNumber,
+            id: anilistId,
+          });
+
+          if (Array.isArray(pagesRes) && pagesRes.length > 0) {
+            return pagesRes
+              .map((p: any) => (typeof p === 'string' ? p : p.url))
+              .filter((u: any) => typeof u === 'string' && u.startsWith('http'));
+          }
+          if (pagesRes?.pages && Array.isArray(pagesRes.pages) && pagesRes.pages.length > 0) {
+            return pagesRes.pages
+              .map((p: any) => (typeof p === 'string' ? p : p.url))
+              .filter((u: any) => typeof u === 'string' && u.startsWith('http'));
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('getAnifyMangaPages notice:', err);
+  }
+  return [];
+}
+
+export const anifyService = {
+  getSources,
+  getAnimeStreamSources,
+  getAnifyAnimeInfo,
+  getAnifyEpisodes,
+  getAnifyNovelInfo,
+  getAnifyNovelChapters,
+  getNovelChapterContent,
+  getAnifyMangaPages,
+};

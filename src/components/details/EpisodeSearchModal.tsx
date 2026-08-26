@@ -1,6 +1,21 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Search, Check, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Search, Check, ChevronDown, Loader2, Play, BookOpen } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { EpisodeItem, MangaChapterItem, NovelChapterItem } from '../../types';
+import {
+  fetchMediaEpisodes,
+  fetchMediaMangaChapters,
+  fetchMediaNovelChapters,
+} from '../../services/apiClient';
+
+interface SearchItem {
+  id: string | number;
+  number: number;
+  title: string;
+  subtitle?: string;
+  thumbnail?: string;
+  filler?: boolean;
+}
 
 export const EpisodeSearchModal: React.FC = () => {
   const {
@@ -12,29 +27,91 @@ export const EpisodeSearchModal: React.FC = () => {
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSource, setSelectedSource] = useState('Default');
+  const [selectedSource, setSelectedSource] = useState('Anify Fast (HLS)');
   const [showSourceDropdown, setShowSourceDropdown] = useState(false);
+  const [items, setItems] = useState<SearchItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const sources = [
+    'Anify Fast (HLS)',
+    'GogoAnime Primary',
+    'Zoro Sub/Dub',
+    'MangaDex Official',
+    'Global Fallback',
+  ];
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadItems() {
+      if (!selectedMedia) return;
+      setIsLoading(true);
+
+      try {
+        if (selectedMedia.category === 'anime') {
+          const liveEps = await fetchMediaEpisodes(selectedMedia);
+          if (!isCancelled) {
+            setItems(
+              liveEps.map((ep) => ({
+                id: ep.id,
+                number: ep.number,
+                title: ep.title || `Episode ${ep.number}`,
+                subtitle: ep.filler ? 'Filler' : 'Canon Airing',
+                thumbnail: ep.thumbnail,
+                filler: ep.filler,
+              }))
+            );
+          }
+        } else if (selectedMedia.category === 'manga') {
+          const liveManga = await fetchMediaMangaChapters(selectedMedia);
+          if (!isCancelled) {
+            setItems(
+              liveManga.map((ch) => ({
+                id: ch.id,
+                number: ch.chapterNumber,
+                title: ch.title || `Chapter ${ch.chapterNumber}`,
+                subtitle: ch.pages ? `${ch.pages} Pages` : undefined,
+              }))
+            );
+          }
+        } else {
+          const liveNovels = await fetchMediaNovelChapters(selectedMedia);
+          if (!isCancelled) {
+            setItems(
+              liveNovels.map((ch) => ({
+                id: ch.id,
+                number: ch.chapterNumber,
+                title: ch.title || `Chapter ${ch.chapterNumber}`,
+                subtitle: ch.volume ? `Volume ${ch.volume}` : 'Light Novel',
+              }))
+            );
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load items in search modal:', err);
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    if (showEpisodeSearch) {
+      loadItems();
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [showEpisodeSearch, selectedMedia?.id, selectedMedia?.category]);
 
   if (!showEpisodeSearch || !selectedMedia) return null;
 
-  const sources = ['Default', 'Source 1 (Sub)', 'Source 2 (Dub)', 'Zone Fast', 'HLS Multi'];
-  const totalCount =
-    selectedMedia.totalEpisodes || selectedMedia.totalChapters || selectedMedia.totalVolumes || 24;
-
-  const allItems = Array.from({ length: totalCount }, (_, i) => ({
-    number: i + 1,
-    title:
-      selectedMedia.category === 'anime'
-        ? `Episode ${i + 1}`
-        : selectedMedia.category === 'manga'
-        ? `Chapter ${i + 1}`
-        : `Volume ${i + 1}`,
-  }));
-
-  const filteredItems = allItems.filter(
+  const filteredItems = items.filter(
     (item) =>
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(item.number).includes(searchQuery)
+      String(item.number).includes(searchQuery) ||
+      (item.subtitle && item.subtitle.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const handleSelect = (num: number) => {
@@ -65,7 +142,9 @@ export const EpisodeSearchModal: React.FC = () => {
             placeholder={
               selectedMedia.category === 'anime'
                 ? 'Search episode number or title...'
-                : 'Search chapter...'
+                : selectedMedia.category === 'manga'
+                ? 'Search chapter number...'
+                : 'Search novel volume or chapter...'
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -80,12 +159,12 @@ export const EpisodeSearchModal: React.FC = () => {
             onClick={() => setShowSourceDropdown((prev) => !prev)}
             className="flex items-center gap-1.5 px-3 py-2 bg-white/10 rounded-full text-xs font-semibold text-white/90 border border-white/10 hover:bg-white/20 cursor-pointer"
           >
-            <span>{selectedSource}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-white/60" />
+            <span className="max-w-[100px] truncate">{selectedSource}</span>
+            <ChevronDown className="w-3.5 h-3.5 text-white/60 shrink-0" />
           </button>
 
           {showSourceDropdown && (
-            <div className="absolute right-0 top-full mt-2 w-44 bg-[#181822] border border-white/15 rounded-2xl p-1.5 shadow-2xl z-50">
+            <div className="absolute right-0 top-full mt-2 w-48 bg-[#181822] border border-white/15 rounded-2xl p-1.5 shadow-2xl z-50">
               {sources.map((src) => (
                 <button
                   key={src}
@@ -95,8 +174,8 @@ export const EpisodeSearchModal: React.FC = () => {
                   }}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl text-left hover:bg-purple-600/30 hover:text-white transition-colors cursor-pointer"
                 >
-                  <span>{src}</span>
-                  {selectedSource === src && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  <span className="truncate">{src}</span>
+                  {selectedSource === src && <Check className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
                 </button>
               ))}
             </div>
@@ -105,27 +184,57 @@ export const EpisodeSearchModal: React.FC = () => {
       </div>
 
       {/* Search Grid Results */}
-      <div className="p-4 max-w-2xl mx-auto space-y-2">
-        <p className="text-xs text-white/50 px-1 font-medium">
-          Found {filteredItems.length} {selectedMedia.category === 'anime' ? 'episodes' : 'chapters'}
-        </p>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {filteredItems.map((item) => (
-            <button
-              key={item.number}
-              onClick={() => handleSelect(item.number)}
-              className="flex items-center justify-between p-3 bg-[#13131B] rounded-2xl border border-white/5 hover:border-purple-500/50 hover:bg-purple-600/10 transition-all text-left group cursor-pointer"
-            >
-              <span className="text-xs font-bold text-white group-hover:text-purple-300">
-                {item.title}
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/70">
-                #{item.number}
-              </span>
-            </button>
-          ))}
+      <div className="p-4 max-w-2xl mx-auto space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs text-white/50 font-medium">
+            {isLoading
+              ? 'Fetching live indices...'
+              : `Found ${filteredItems.length} verified ${
+                  selectedMedia.category === 'anime' ? 'episodes' : 'chapters'
+                }`}
+          </p>
+          {isLoading && <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />}
         </div>
+
+        {isLoading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-2 text-white/50">
+            <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+            <p className="text-xs">Loading live metadata...</p>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="py-16 text-center text-xs text-white/50 bg-[#121218] rounded-2xl border border-white/5 p-6">
+            No matching items found.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {filteredItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleSelect(item.number)}
+                className="flex items-center justify-between p-3 bg-[#13131B] rounded-2xl border border-white/5 hover:border-purple-500/50 hover:bg-purple-600/10 transition-all text-left group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {selectedMedia.category === 'anime' ? (
+                    <Play className="w-4 h-4 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  ) : (
+                    <BookOpen className="w-4 h-4 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  )}
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-white group-hover:text-purple-300 block truncate">
+                      {item.title}
+                    </span>
+                    {item.subtitle && (
+                      <span className="text-[10px] text-white/40 block">{item.subtitle}</span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/70 shrink-0 font-mono">
+                  #{item.number}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

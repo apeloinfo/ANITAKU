@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { NavTab } from '../../types';
+import { safeGetItem } from '../../utils/storage';
 
 export type MainTab = 'home' | 'profile' | 'community' | 'schedule' | 'search' | 'settings';
 
@@ -46,10 +47,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   };
 
   // Get user profile initials dynamically (fallback to MD)
-  const profileName =
-    typeof window !== 'undefined'
-      ? localStorage.getItem('satori_profile_name') || 'MD'
-      : 'MD';
+  const profileName = safeGetItem('satori_profile_name', 'MD');
   const userInitials =
     propUserInitials || profileName.trim().slice(0, 2).toUpperCase() || 'MD';
 

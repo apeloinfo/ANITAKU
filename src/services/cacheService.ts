@@ -158,12 +158,12 @@ export async function cacheSet<T>(key: string, data: T): Promise<void> {
   // 1. Set In-Memory Map (Always succeeds)
   memoryCache.set(key, envelope);
 
-  // 2. Set LocalStorage (Best-effort, graceful on quota limit)
+  // 2. Set LocalStorage (Best-effort, small entries only to preserve quota for user data)
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const serialized = JSON.stringify(envelope);
-      // Avoid storing excessively large objects in LocalStorage (cap ~500KB per entry in LS)
-      if (serialized.length < 500000) {
+      // Only keep small entries in LocalStorage (< 25KB) so IndexedDB handles large collections
+      if (serialized.length < 25000) {
         window.localStorage.setItem(LS_PREFIX + key, serialized);
       }
     } catch {

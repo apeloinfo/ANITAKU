@@ -103,8 +103,8 @@ async function startServer() {
   app.get('/api/anify/*', async (req, res) => {
     try {
       const targetPath = req.params[0] || '';
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const targetUrl = `https://api.anify.tv/${targetPath}${queryString ? '?' + queryString : ''}`;
+      const rawQuery = req.url.includes('?') ? req.url.substring(req.url.indexOf('?') + 1) : '';
+      const targetUrl = `https://api.anify.tv/${targetPath}${rawQuery ? '?' + rawQuery : ''}`;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -140,19 +140,23 @@ async function startServer() {
     }
   });
 
-  // API Proxy for MangaDex
+  // API Proxy for MangaDex (Preserves array and nested query parameters)
   app.get('/api/mangadex/*', async (req, res) => {
     try {
-      const targetPath = req.params[0] || '';
-      const queryString = new URLSearchParams(req.query as Record<string, string>).toString();
-      const targetUrl = `https://api.mangadex.org/${targetPath}${queryString ? '?' + queryString : ''}`;
+      const subPath = req.originalUrl.replace(/^\/api\/mangadex\/?/, '');
+      const targetUrl = `https://api.mangadex.org/${subPath}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const response = await fetch(targetUrl, {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const contentType = response.headers.get('content-type') || '';
       const text = await response.text();
@@ -174,6 +178,116 @@ async function startServer() {
       console.warn('Server MangaDex proxy notice:', error?.message || error);
       return res.status(500).json({ error: 'Failed to proxy request to MangaDex' });
     }
+  });
+
+  // Safe Image Proxy for bypassing external CORS / Hotlink Protections
+  app.get('/api/image-proxy', async (req, res) => {
+    const imageUrl = req.query.url as string;
+    if (!imageUrl) {
+      return res.status(400).send('Missing image url');
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+
+    const urlsToTry = [imageUrl];
+
+    // If it's a MangaDex at-home node URL, add the canonical uploads.mangadex.org fallback
+    if (imageUrl.includes('mangadex.network/data') || imageUrl.includes('mangadex.network/data-saver')) {
+      const match = imageUrl.match(/\/(data(?:-saver)?\/[a-f0-9]+\/[^?#]+)/i);
+      if (match && match[1]) {
+        urlsToTry.push(`https://uploads.mangadex.org/${match[1]}`);
+      }
+    }
+
+    for (const url of urlsToTry) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://mangadex.org/',
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const contentType = response.headers.get('content-type') || 'image/jpeg';
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+
+          const arrayBuffer = await response.arrayBuffer();
+          return res.send(Buffer.from(arrayBuffer));
+        }
+      } catch (err: any) {
+        console.warn('Image proxy attempt failed for url:', url, err?.message);
+      }
+    }
+
+    return res.status(502).send('Failed to fetch remote image');
+  });
+
+  // API Proxy for Multi-Provider Anime Video Streams & Consumet Scrapers
+  app.get('/api/anime/sources', async (req, res) => {
+    const { title, episode, subType = 'sub' } = req.query;
+    if (!title) {
+      return res.status(400).json({ error: 'Anime title is required' });
+    }
+
+    const cleanTitle = String(title)
+      .toLowerCase()
+      .replace(/\s*\(tv\)/gi, '')
+      .replace(/\s*\(season\s*\d+\)/gi, '')
+      .replace(/[^a-z0-9\s]/gi, '')
+      .trim()
+      .replace(/\s+/g, '-');
+
+    const epNum = Number(episode) || 1;
+
+    // List of dynamic public stream provider APIs to query in succession
+    const providers = [
+      `https://api-consumet-org-six.vercel.app/anime/gogoanime/watch/${cleanTitle}-episode-${epNum}`,
+      `https://api.consumet.org/anime/gogoanime/watch/${cleanTitle}-episode-${epNum}`,
+      `https://api-consumet.fly.dev/anime/gogoanime/watch/${cleanTitle}-episode-${epNum}`,
+      `https://api.amvstr.me/api/v2/stream/${cleanTitle}/${epNum}`,
+    ];
+
+    for (const url of providers) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const apiRes = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (apiRes.ok) {
+          const data = await apiRes.json();
+          if (data && Array.isArray(data.sources) && data.sources.length > 0) {
+            return res.json({
+              sources: data.sources,
+              subtitles: data.subtitles || [],
+              intro: data.intro,
+              outro: data.outro,
+              provider: 'Consumet Multi-Mirror',
+            });
+          }
+        }
+      } catch {
+        // Continue to next provider
+      }
+    }
+
+    return res.status(404).json({ error: 'No stream available from public scrapers' });
   });
 
   // Health check route

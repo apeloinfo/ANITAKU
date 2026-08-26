@@ -14,21 +14,24 @@ import {
   X,
   UserCheck,
   Sparkles,
+  Star,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { LibraryStatus, MediaCategory, MediaItem } from '../../types';
-import { fetchMediaDetailsById } from '../../services/api';
+import { LibraryStatus, MediaCategory, MediaItem, UserLibraryEntry } from '../../types';
 import { PosterImage } from '../common/PosterImage';
+import { safeGetItem, safeSetItem } from '../../utils/storage';
 
 export const ProfileView: React.FC = () => {
   const {
     userLibrary,
+    userFavorites,
     recentActivity,
     openMediaDetails,
     activeLibraryStatus,
     setActiveLibraryStatus,
     removeFromLibrary,
     updateLibraryProgress,
+    isMediaFavorite,
     toggleFavorite,
     showToast,
   } = useApp();
@@ -39,25 +42,30 @@ export const ProfileView: React.FC = () => {
   // Edit Profile modal state with LocalStorage persistence
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [profileName, setProfileName] = useState(() => {
-    return localStorage.getItem('satori_profile_name') || 'MD';
+    return safeGetItem('satori_profile_name', 'MD');
   });
   const [profileSource, setProfileSource] = useState(() => {
-    return localStorage.getItem('satori_profile_source') || 'Google library';
+    return safeGetItem('satori_profile_source', 'Google library');
   });
   const [profileLevel, setProfileLevel] = useState(() => {
-    return localStorage.getItem('satori_profile_level') || '2';
+    return safeGetItem('satori_profile_level', '2');
   });
 
   const saveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('satori_profile_name', profileName);
-    localStorage.setItem('satori_profile_source', profileSource);
-    localStorage.setItem('satori_profile_level', profileLevel);
+    safeSetItem('satori_profile_name', profileName, false);
+    safeSetItem('satori_profile_source', profileSource, false);
+    safeSetItem('satori_profile_level', profileLevel, false);
     setShowEditProfile(false);
     showToast('Profile updated successfully');
   };
 
-  const getMediaForEntry = (mediaId: string | number, fallbackTitle: string, fallbackCover: string, category?: MediaCategory): MediaItem => {
+  const getMediaForEntry = (
+    mediaId: string | number,
+    fallbackTitle: string,
+    fallbackCover: string,
+    category?: MediaCategory
+  ): MediaItem => {
     return {
       id: String(mediaId),
       title: fallbackTitle,
@@ -72,8 +80,8 @@ export const ProfileView: React.FC = () => {
     };
   };
 
-  // Status counts
-  const favoritesCount = userLibrary.filter((i) => i.isFavorite).length;
+  // Status counts (Favorites strictly derived from userFavorites)
+  const favoritesCount = userFavorites.length;
   const watchingCount = userLibrary.filter((i) => i.status === 'Watching').length;
   const readingCount = userLibrary.filter((i) => i.status === 'Reading').length;
   const planningCount = userLibrary.filter((i) => i.status === 'Planning').length;
@@ -128,13 +136,14 @@ export const ProfileView: React.FC = () => {
     },
   ];
 
-  // If a status capsule is clicked, filter subpage items
-  const filteredSubpageItems = activeLibraryStatus
-    ? (activeLibraryStatus === 'Favorites'
-        ? userLibrary.filter((i) => i.isFavorite)
-        : userLibrary.filter((i) => i.status === activeLibraryStatus)
-      ).filter((i) => i.title.toLowerCase().includes(subpageSearch.toLowerCase()))
-    : [];
+  // Filter items for subpage view
+  const filteredFavorites = userFavorites.filter((i) =>
+    i.title.toLowerCase().includes(subpageSearch.toLowerCase())
+  );
+
+  const filteredLibraryItems = userLibrary
+    .filter((i) => i.status === activeLibraryStatus)
+    .filter((i) => i.title.toLowerCase().includes(subpageSearch.toLowerCase()));
 
   return (
     <div className="w-full min-h-screen bg-black text-white pb-32 select-none">
@@ -158,7 +167,9 @@ export const ProfileView: React.FC = () => {
                   {activeLibraryStatus}
                 </h1>
                 <p className="text-xs text-white/50">
-                  {filteredSubpageItems.length} items in your collection
+                  {activeLibraryStatus === 'Favorites'
+                    ? `${filteredFavorites.length} favorite titles in your profile`
+                    : `${filteredLibraryItems.length} items in your collection`}
                 </p>
               </div>
             </div>
@@ -178,60 +189,118 @@ export const ProfileView: React.FC = () => {
 
           {/* List items */}
           <div className="space-y-3 pt-1">
-            {filteredSubpageItems.length === 0 ? (
-              <div className="py-20 text-center space-y-2">
-                <p className="text-sm font-semibold text-white/60">No items found in {activeLibraryStatus}</p>
-                <p className="text-xs text-white/40">Explore media from the Home tab and add them to your library.</p>
-              </div>
-            ) : (
-              filteredSubpageItems.map((entry) => {
-                const fullMedia = getMediaForEntry(entry.mediaId, entry.title, entry.coverImage);
-                return (
+            {activeLibraryStatus === 'Favorites' ? (
+              filteredFavorites.length === 0 ? (
+                <div className="py-20 text-center space-y-2">
+                  <Heart className="w-8 h-8 text-rose-500/40 mx-auto" />
+                  <p className="text-sm font-semibold text-white/60">No favorites added yet</p>
+                  <p className="text-xs text-white/40">
+                    Tap the Heart icon on any title details page to save it to your Favorites.
+                  </p>
+                </div>
+              ) : (
+                filteredFavorites.map((item) => (
                   <div
-                    key={entry.id}
-                    onClick={() => openMediaDetails(fullMedia)}
-                    className="flex items-center gap-3.5 p-3 bg-[#11131A] rounded-2xl border border-white/10 hover:border-purple-500/40 transition-all cursor-pointer shadow-lg group"
+                    key={item.id}
+                    onClick={() => openMediaDetails(item)}
+                    className="flex items-center gap-3.5 p-3 bg-[#11131A] rounded-2xl border border-white/10 hover:border-pink-500/40 transition-all cursor-pointer shadow-lg group"
                   >
                     <PosterImage
-                      src={entry.coverImage}
-                      alt={entry.title}
+                      src={item.coverImage}
+                      alt={item.title}
                       className="w-14 h-20 rounded-xl shadow-md shrink-0"
                       imgClassName="group-hover:scale-105 transition-transform"
                     />
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-cyan-300 transition-colors">
-                        {entry.title}
+                      <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-pink-300 transition-colors">
+                        {item.title}
                       </h3>
                       <div className="flex items-center gap-2 mt-1.5 text-xs text-white/60">
                         <span className="capitalize px-2 py-0.5 rounded-full bg-white/10 font-bold text-[10px] text-white/80">
-                          {entry.category}
+                          {item.category}
                         </span>
-                        <span>
-                          {entry.category === 'anime' ? 'Ep' : 'Ch'} {entry.currentProgress} / {entry.totalCount}
-                        </span>
+                        {item.score && (
+                          <div className="flex items-center gap-1 text-amber-400 font-bold text-[11px]">
+                            <Star className="w-3 h-3 fill-amber-400" />
+                            <span>{item.score}</span>
+                          </div>
+                        )}
+                        {item.year && <span className="text-[10px] text-white/40">{item.year}</span>}
                       </div>
-                      <p className="text-[10px] text-white/40 mt-1">Updated {entry.lastUpdated}</p>
+                      <p className="text-[10px] text-white/40 mt-1 capitalize">
+                        {item.format || 'Media'} · {item.status || 'Active'}
+                      </p>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => toggleFavorite(fullMedia)}
-                        className={`p-2 rounded-full transition-colors cursor-pointer ${
-                          entry.isFavorite ? 'text-rose-500 bg-rose-500/10' : 'text-white/40 hover:text-white bg-white/5'
-                        }`}
+                        onClick={() => toggleFavorite(item)}
+                        className="p-2.5 rounded-full transition-colors cursor-pointer text-rose-500 bg-rose-500/10 hover:bg-rose-500/20"
+                        title="Remove from favorites"
                       >
-                        <Heart className={`w-4 h-4 ${entry.isFavorite ? 'fill-current' : ''}`} />
-                      </button>
-                      <button
-                        onClick={() => removeFromLibrary(entry.mediaId)}
-                        className="p-2 rounded-full text-white/40 hover:text-rose-400 hover:bg-white/5 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
+                        <Heart className="w-4 h-4 fill-current" />
                       </button>
                     </div>
                   </div>
-                );
-              })
+                ))
+              )
+            ) : (
+              filteredLibraryItems.length === 0 ? (
+                <div className="py-20 text-center space-y-2">
+                  <p className="text-sm font-semibold text-white/60">No items found in {activeLibraryStatus}</p>
+                  <p className="text-xs text-white/40">Explore media from the Home tab and add them to your library.</p>
+                </div>
+              ) : (
+                filteredLibraryItems.map((entry) => {
+                  const fullMedia = getMediaForEntry(entry.mediaId, entry.title, entry.coverImage, entry.category);
+                  const isFav = isMediaFavorite(entry.mediaId);
+                  return (
+                    <div
+                      key={entry.id}
+                      onClick={() => openMediaDetails(fullMedia)}
+                      className="flex items-center gap-3.5 p-3 bg-[#11131A] rounded-2xl border border-white/10 hover:border-purple-500/40 transition-all cursor-pointer shadow-lg group"
+                    >
+                      <PosterImage
+                        src={entry.coverImage}
+                        alt={entry.title}
+                        className="w-14 h-20 rounded-xl shadow-md shrink-0"
+                        imgClassName="group-hover:scale-105 transition-transform"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-cyan-300 transition-colors">
+                          {entry.title}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1.5 text-xs text-white/60">
+                          <span className="capitalize px-2 py-0.5 rounded-full bg-white/10 font-bold text-[10px] text-white/80">
+                            {entry.category}
+                          </span>
+                          <span>
+                            {entry.category === 'anime' ? 'Ep' : 'Ch'} {entry.currentProgress} / {entry.totalCount}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-white/40 mt-1">Updated {entry.lastUpdated}</p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => toggleFavorite(fullMedia)}
+                          className={`p-2 rounded-full transition-colors cursor-pointer ${
+                            isFav ? 'text-rose-500 bg-rose-500/10' : 'text-white/40 hover:text-white bg-white/5'
+                          }`}
+                        >
+                          <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
+                        </button>
+                        <button
+                          onClick={() => removeFromLibrary(entry.mediaId)}
+                          className="p-2 rounded-full text-white/40 hover:text-rose-400 hover:bg-white/5 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )
             )}
           </div>
         </div>
@@ -322,7 +391,7 @@ export const ProfileView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-1.5">
                   {watchingGridItems.length > 0 ? (
                     watchingGridItems.map((entry) => {
-                      const media = getMediaForEntry(entry.mediaId, entry.title, entry.coverImage);
+                      const media = getMediaForEntry(entry.mediaId, entry.title, entry.coverImage, entry.category);
                       return (
                         <div
                           key={entry.id}
@@ -361,7 +430,7 @@ export const ProfileView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-1.5">
                   {readingGridItems.length > 0 ? (
                     readingGridItems.map((entry) => {
-                      const media = getMediaForEntry(entry.mediaId, entry.title, entry.coverImage);
+                      const media = getMediaForEntry(entry.mediaId, entry.title, entry.coverImage, entry.category);
                       return (
                         <div
                           key={entry.id}
@@ -394,143 +463,135 @@ export const ProfileView: React.FC = () => {
             </h2>
 
             <div className="space-y-2.5">
-              {recentActivity.map((act) => {
-                const media = getMediaForEntry(act.mediaId, act.title, act.coverImage);
-                const isWatching = act.type === 'WATCHING';
-                const isReading = act.type === 'READING';
-                const isCompleted = act.type === 'COMPLETED';
+              {recentActivity.length === 0 ? (
+                <div className="p-6 text-center text-xs text-white/40 bg-[#0e1118]/60 border border-white/5 rounded-2xl">
+                  No recent activity logged yet.
+                </div>
+              ) : (
+                recentActivity.map((act) => {
+                  const media = getMediaForEntry(act.mediaId, act.title, act.coverImage);
+                  const isWatching = act.type === 'WATCHING';
+                  const isReading = act.type === 'READING';
+                  const isCompleted = act.type === 'COMPLETED';
 
-                return (
-                  <div
-                    key={act.id}
-                    onClick={() => openMediaDetails(media)}
-                    className="flex items-center gap-3.5 p-3 bg-[#0e1118]/90 hover:bg-[#141822] border border-white/10 rounded-2xl transition-all duration-150 cursor-pointer shadow-md group"
-                  >
-                    {/* Thumbnail Poster */}
-                    <PosterImage
-                      src={act.coverImage}
-                      alt={act.title}
-                      className="w-12 h-14 rounded-xl shrink-0 shadow-sm"
-                      imgClassName="group-hover:scale-105 transition-transform"
-                    />
+                  return (
+                    <div
+                      key={act.id}
+                      onClick={() => openMediaDetails(media)}
+                      className="flex items-center gap-3.5 p-3 bg-[#0e1118]/90 hover:bg-[#141822] border border-white/10 rounded-2xl transition-all duration-150 cursor-pointer shadow-md group"
+                    >
+                      {/* Thumbnail Poster */}
+                      <PosterImage
+                        src={act.coverImage}
+                        alt={act.title}
+                        className="w-12 h-14 rounded-xl shrink-0 shadow-sm"
+                        imgClassName="group-hover:scale-105 transition-transform"
+                      />
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        {isWatching && (
-                          <span className="text-[#4ade80] font-extrabold text-[11px] uppercase tracking-wider shrink-0">
-                            WATCHING
-                          </span>
-                        )}
-                        {isReading && (
-                          <span className="text-white font-extrabold text-[11px] uppercase tracking-wider shrink-0">
-                            READING
-                          </span>
-                        )}
-                        {isCompleted && (
-                          <span className="text-[#38bdf8] font-extrabold text-[11px] uppercase tracking-wider shrink-0">
-                            COMPLETED
-                          </span>
-                        )}
-                        {!isWatching && !isReading && !isCompleted && (
-                          <span className="text-[#f43f5e] font-extrabold text-[11px] uppercase tracking-wider shrink-0">
-                            {act.type}
-                          </span>
-                        )}
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {isWatching && (
+                            <span className="text-[#4ade80] font-extrabold text-[11px] uppercase tracking-wider shrink-0">
+                              WATCHING
+                            </span>
+                          )}
+                          {isReading && (
+                            <span className="text-white font-extrabold text-[11px] uppercase tracking-wider shrink-0">
+                              READING
+                            </span>
+                          )}
+                          {isCompleted && (
+                            <span className="text-[#38bdf8] font-extrabold text-[11px] uppercase tracking-wider shrink-0">
+                              COMPLETED
+                            </span>
+                          )}
+                          {!isWatching && !isReading && !isCompleted && (
+                            <span className="text-[#f43f5e] font-extrabold text-[11px] uppercase tracking-wider shrink-0">
+                              {act.type}
+                            </span>
+                          )}
 
-                        <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-cyan-300 transition-colors">
-                          {act.title}
-                        </h3>
+                          <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-cyan-300 transition-colors">
+                            {act.title}
+                          </h3>
+                        </div>
+
+                        <p className="text-xs text-white/50 font-medium mt-1">
+                          {act.timeAgo}
+                        </p>
                       </div>
-
-                      <p className="text-xs text-white/50 font-medium mt-1">
-                        {act.timeAgo}
-                      </p>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
-
-          {/* 5. EDIT PROFILE MODAL */}
-          {showEditProfile && (
-            <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-              <div className="w-full max-w-md bg-[#13151D] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <User className="w-5 h-5 text-cyan-400" />
-                    <span>Edit Profile</span>
-                  </h3>
-                  <button
-                    onClick={() => setShowEditProfile(false)}
-                    className="p-1 rounded-full text-white/50 hover:text-white hover:bg-white/10"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <form onSubmit={saveProfile} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-white/70 mb-1.5">
-                      Display Name / Initials
-                    </label>
-                    <input
-                      type="text"
-                      value={profileName}
-                      onChange={(e) => setProfileName(e.target.value)}
-                      className="w-full bg-[#0D0E14] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-white/70 mb-1.5">
-                      Library Source
-                    </label>
-                    <input
-                      type="text"
-                      value={profileSource}
-                      onChange={(e) => setProfileSource(e.target.value)}
-                      className="w-full bg-[#0D0E14] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
-                      placeholder="e.g. Google library, AniList, MangaDex"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-white/70 mb-1.5">
-                      Level
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="99"
-                      value={profileLevel}
-                      onChange={(e) => setProfileLevel(e.target.value)}
-                      className="w-full bg-[#0D0E14] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
-                    />
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowEditProfile(false)}
-                      className="flex-1 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-white/70 hover:bg-white/5 cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-extrabold shadow-lg shadow-cyan-500/25 cursor-pointer"
-                    >
-                      Save Changes
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
         </>
+      )}
+
+      {/* EDIT PROFILE MODAL */}
+      {showEditProfile && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm bg-[#12141C] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-cyan-400" />
+                <span>Edit Profile</span>
+              </h3>
+              <button
+                onClick={() => setShowEditProfile(false)}
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={saveProfile} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-white/70">Display Name</label>
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-white/70">Library Source / Title</label>
+                <input
+                  type="text"
+                  value={profileSource}
+                  onChange={(e) => setProfileSource(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-white/70">Level Number</label>
+                <input
+                  type="number"
+                  value={profileLevel}
+                  onChange={(e) => setProfileLevel(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
+                  min="1"
+                  max="99"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-[#0091FF] hover:bg-[#007fe0] font-bold text-sm text-white rounded-xl shadow-lg transition-colors cursor-pointer"
+              >
+                Save Changes
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

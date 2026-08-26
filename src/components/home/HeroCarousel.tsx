@@ -39,13 +39,21 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
   // Fetch dynamic title logos for current carousel items
   useEffect(() => {
     if (carouselItems.length === 0) return;
+    let isCancelled = false;
     carouselItems.forEach((item) => {
-      if (logoUrls[item.title] === undefined) {
-        fetchMediaLogo(item.title).then((url) => {
-          setLogoUrls((prev) => ({ ...prev, [item.title]: url }));
-        });
+      if (item && item.title && logoUrls[item.title] === undefined) {
+        fetchMediaLogo(item.title)
+          .then((url) => {
+            if (!isCancelled) {
+              setLogoUrls((prev) => ({ ...prev, [item.title]: url }));
+            }
+          })
+          .catch(() => {});
       }
     });
+    return () => {
+      isCancelled = true;
+    };
   }, [carouselItems, logoUrls]);
 
   // Automatic slide rotation (10-Second Interval)
@@ -142,7 +150,10 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
     resetAutoRotateTimer();
   };
 
-  const currentItem = carouselItems[currentIndex % (carouselItems.length || 1)] || carouselItems[0];
+  const currentItem =
+    carouselItems && carouselItems.length > 0
+      ? carouselItems[currentIndex % carouselItems.length]
+      : null;
   const bannerSrc = currentItem?.bannerImage || currentItem?.coverImage || '';
   const genresSubtitle = currentItem?.genres?.slice(0, 3).join(' • ') || '';
   const activeLogoUrl =
